@@ -1,40 +1,76 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title Time-Locked Personal Vault
-/// @notice TODO: implement deposit(), withdraw(), and extendLock() sesuai spesifikasi di README.md
 contract PersonalVault {
+    // State Variables
     address public owner;
     uint256 public unlockTime;
 
+    // Events
     event Deposit(address indexed sender, uint256 amount);
-    event Withdrawal(address indexed owner, uint256 amount);
-    event LockExtended(uint256 previousUnlockTime, uint256 newUnlockTime);
+    event Withdrawal(uint256 amount, uint256 timestamp);
+    event LockExtended(uint256 newUnlockTime);
 
+    // Custom Errors
     error FundsLocked();
     error NotOwner();
     error InvalidUnlockTime();
 
-    constructor(uint256 _unlockTime) {
-        // TODO: validate _unlockTime tidak di masa lalu
+    // Constructor
+    constructor(uint256 _unlockTime) payable {
+        require(
+            _unlockTime > block.timestamp,
+            "Unlock time must be in the future"
+        );
+
         owner = msg.sender;
         unlockTime = _unlockTime;
     }
 
+    // Modifier
     modifier onlyOwner() {
-        // TODO
+        if (msg.sender != owner) {
+            revert NotOwner();
+        }
         _;
     }
 
-    function deposit() external payable {
-        // TODO
+    /// @notice Deposit ETH into the vault
+    function deposit() external payable onlyOwner {
+        require(msg.value > 0, "Must send ETH");
+
+        emit Deposit(msg.sender, msg.value);
     }
 
+    /// @notice Withdraw all ETH after unlock time
     function withdraw() external onlyOwner {
-        // TODO
+        if (block.timestamp < unlockTime) {
+            revert FundsLocked();
+        }
+
+        uint256 amount = address(this).balance;
+        require(amount > 0, "No balance");
+
+        // Interaction
+        (bool success, ) = payable(owner).call{value: amount}("");
+        require(success, "Transfer failed");
+
+        emit Withdrawal(amount, block.timestamp);
     }
 
+    /// @notice Extend lock period
     function extendLock(uint256 newTime) external onlyOwner {
-        // TODO
+        if (newTime <= unlockTime) {
+            revert InvalidUnlockTime();
+        }
+
+        unlockTime = newTime;
+
+        emit LockExtended(newTime);
+    }
+
+    /// @notice Get current contract balance
+    function getBalance() external view returns (uint256) {
+        return address(this).balance;
     }
 }
